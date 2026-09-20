@@ -1,2 +1,9 @@
 # FamilyHub
-MyFamilyHub
+
+Private Familienverwaltung.
+
+Module:
+- Essensplanung
+- Einkaufsliste
+- Fahrzeugstatistik
+- Dokumentenablage
