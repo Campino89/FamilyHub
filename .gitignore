@@ -1,0 +1,100 @@
+# ==========================================
+# Visual Studio / .NET
+# ==========================================
+
+# Build results
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio user-specific files
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio Code
+.vscode/
+
+# Rider / JetBrains
+.idea/
+*.sln.iml
+
+# ==========================================
+# Test results
+# ==========================================
+
+TestResults/
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+
+# ==========================================
+# NuGet
+# ==========================================
+
+*.nupkg
+*.snupkg
+
+# NuGet packages are restored automatically
+packages/
+!packages/build/
+!packages/repositories.config
+
+# NuGet generated files
+*.nuget.props
+*.nuget.targets
+
+# ==========================================
+# .NET
+# ==========================================
+
+artifacts/
+
+# Publish output
+publish/
+
+# ==========================================
+# Environment / secrets
+# ==========================================
+
+.env
+.env.*
+!.env.example
+
+appsettings.Development.json
+appsettings.Local.json
+
+secrets.json
+
+# ==========================================
+# Operating system
+# ==========================================
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# ==========================================
+# Temporary files
+# ==========================================
+
+*.tmp
+*.temp
+*.bak
+*.swp
+*.orig
+
+# ==========================================
+# ReSharper
+# ==========================================
+
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
