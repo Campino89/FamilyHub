@@ -15,5 +15,8 @@ public class MealConfiguration : IEntityTypeConfiguration<Meal>
         builder.Property(x => x.Name)
             .IsRequired()
             .HasMaxLength(200);
+
+        builder.HasIndex(x => x.Name)
+            .IsUnique();
     }
 }

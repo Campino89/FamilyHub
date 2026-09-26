@@ -29,7 +29,20 @@ public class MealsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<Meal>> Create(CreateMealRequest request)
     {
-        var meal = new Meal(request.Name);
+        var name = request.Name.Trim();
+
+        var exists = await _dbContext.Meals
+            .AnyAsync(x => x.Name.ToLower() == name.ToLower());
+
+        if (exists)
+        {
+            return Conflict(new
+            {
+                message = $"Das Gericht '{name}' existiert bereits."
+            });
+        }
+
+        var meal = new Meal(name);
 
         _dbContext.Meals.Add(meal);
         await _dbContext.SaveChangesAsync();
