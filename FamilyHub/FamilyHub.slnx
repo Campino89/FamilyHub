@@ -1,6 +1,7 @@
 <Solution>
   <Project Path="FamilyHub.Api/FamilyHub.Api.csproj" Id="5c25eb62-e56b-4bfc-ad73-b3afb7c773d2" />
   <Project Path="FamilyHub.Infrastructure/FamilyHub.Infrastructure.csproj" Id="9aeabb38-03be-45e8-9e53-8147531bbc8d" />
+  <Project Path="FamilyHub.Web/FamilyHub.Web.csproj" Id="3f15da76-61c3-4685-9ade-34d3aa83a49c" />
   <Project Path="src/FamilyHub.Domain/FamilyHub.Domain.csproj" />
   <Project Path="tests/FamilyHub.Domain.Tests/FamilyHub.Domain.Tests.csproj" />
 </Solution>

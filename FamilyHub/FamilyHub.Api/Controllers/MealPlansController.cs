@@ -178,6 +178,83 @@ public class MealPlansController : ControllerBase
 
         return NoContent();
     }
+
+    [HttpPut("{year:int}/{calendarWeek:int}")]
+    public async Task<IActionResult> SaveWeek(
+    int year,
+    int calendarWeek,
+    SaveWeekRequest request)
+    {
+        var plan = await _dbContext.WeeklyMealPlans
+            .Include(x => x.Entries)
+            .ThenInclude(x => x.Meal)
+            .SingleOrDefaultAsync(x =>
+                x.Year == year &&
+                x.CalendarWeek == calendarWeek);
+
+        if (plan is null)
+        {
+            return NotFound(new
+            {
+                message = $"Für {year} / KW {calendarWeek} wurde kein Wochenplan gefunden."
+            });
+        }
+
+        var requestedMealIds = request.Entries
+            .Where(x => x.MealId.HasValue)
+            .Select(x => x.MealId!.Value)
+            .Distinct()
+            .ToList();
+
+        var meals = await _dbContext.Meals
+            .Where(x => requestedMealIds.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id);
+
+        foreach (var requestedEntry in request.Entries)
+        {
+            var existingEntry = plan.Entries
+                .SingleOrDefault(x => x.Date == requestedEntry.Date);
+
+            if (requestedEntry.MealId is null)
+            {
+                if (existingEntry is not null)
+                {
+                    _dbContext.MealPlanEntries.Remove(existingEntry);
+                }
+
+                continue;
+            }
+
+            if (!meals.TryGetValue(
+                    requestedEntry.MealId.Value,
+                    out var meal))
+            {
+                return BadRequest(new
+                {
+                    message =
+                        $"Das Gericht mit der ID {requestedEntry.MealId} wurde nicht gefunden."
+                });
+            }
+
+            if (existingEntry is null)
+            {
+                plan.AddMeal(requestedEntry.Date, meal);
+
+                var newEntry = plan.Entries
+                    .Single(x => x.Date == requestedEntry.Date);
+
+                _dbContext.MealPlanEntries.Add(newEntry);
+            }
+            else
+            {
+                existingEntry.ChangeMeal(meal);
+            }
+        }
+
+        await _dbContext.SaveChangesAsync();
+
+        return NoContent();
+    }
 }
 
     public record CreateMealPlanRequest(
@@ -189,3 +266,10 @@ public record AddMealPlanEntryRequest(
     Guid MealId);
 
 public record UpdateMealPlanEntryRequest(Guid MealId);
+
+public record SaveWeekRequest(
+    List<SaveWeekEntryRequest> Entries);
+
+public record SaveWeekEntryRequest(
+    DateOnly Date,
+    Guid? MealId);

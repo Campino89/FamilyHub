@@ -1,0 +1,156 @@
+﻿@page "/meals"
+@rendermode InteractiveServer
+
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpClientFactory
+
+<h3>Gerichte</h3>
+
+<div class="mb-3">
+    <input class="form-control"
+           @bind="newMealName"
+           placeholder="Neues Gericht" />
+</div>
+
+<button class="btn btn-primary mb-3"
+        @onclick="CreateMeal">
+    Gericht hinzufügen
+</button>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger">
+        @errorMessage
+    </div>
+}
+
+@if (meals is null)
+{
+    <p>Lade Gerichte...</p>
+}
+else if (meals.Count == 0)
+{
+    <p>Noch keine Gerichte vorhanden.</p>
+}
+else
+{
+    <ul class="list-group">
+        @foreach (var meal in meals)
+        {
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span>@meal.Name</span>
+
+                <button class="btn btn-outline-danger btn-sm"
+                        @onclick="() => DeleteMeal(meal.Id)">
+                    Löschen
+                </button>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private List<MealDto>? meals;
+    private string newMealName = string.Empty;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMeals();
+    }
+
+    private HttpClient CreateClient()
+    {
+        return HttpClientFactory.CreateClient("FamilyHubApi");
+    }
+
+    private async Task LoadMeals()
+    {
+        errorMessage = null;
+
+        try
+        {
+            var client = CreateClient();
+
+            meals = await client.GetFromJsonAsync<List<MealDto>>(
+                "/api/meals");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private async Task CreateMeal()
+    {
+        if (string.IsNullOrWhiteSpace(newMealName))
+        {
+            return;
+        }
+
+        errorMessage = null;
+
+        try
+        {
+            var client = CreateClient();
+
+            var response = await client.PostAsJsonAsync(
+                "/api/meals",
+                new
+                {
+                    name = newMealName
+                });
+
+            response.EnsureSuccessStatusCode();
+
+            newMealName = string.Empty;
+
+            await LoadMeals();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private async Task DeleteMeal(Guid id)
+    {
+        errorMessage = null;
+
+        try
+        {
+            var client = CreateClient();
+
+            var response = await client.DeleteAsync(
+                $"/api/meals/{id}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadMeals();
+                return;
+            }
+
+            var error = await response.Content
+                .ReadFromJsonAsync<ApiError>();
+
+            errorMessage =
+                error?.Message
+                ?? "Das Gericht konnte nicht gelöscht werden.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private sealed class MealDto
+    {
+        public Guid Id { get; set; }
+
+        public string Name { get; set; } = string.Empty;
+    }
+    private sealed class ApiError
+    {
+        public string Message { get; set; } = string.Empty;
+    }
+}

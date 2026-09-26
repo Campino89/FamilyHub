@@ -1,0 +1,489 @@
+﻿@page "/mealplans"
+@rendermode InteractiveServer
+
+@using System.Globalization
+@using System.Net
+@using System.Net.Http.Json
+@inject IHttpClientFactory HttpClientFactory
+
+<h2>Wochenplan</h2>
+
+<div class="row g-3 align-items-end mb-4">
+    <div class="col-auto">
+        <label class="form-label">Jahr</label>
+        <input class="form-control"
+               type="number"
+               @bind="year" />
+    </div>
+
+    <div class="col-auto">
+        <label class="form-label">Kalenderwoche</label>
+        <input class="form-control"
+               type="number"
+               min="1"
+               max="53"
+               @bind="calendarWeek" />
+    </div>
+
+    <div class="col-auto">
+        <button class="btn btn-primary"
+                @onclick="LoadPlan">
+            Wochenplan laden
+        </button>
+    </div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(errorMessage))
+{
+    <div class="alert alert-danger">
+        @errorMessage
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(successMessage))
+{
+    <div class="alert alert-success">
+        @successMessage
+    </div>
+}
+
+@if (loading)
+{
+    <p>Wochenplan wird geladen...</p>
+}
+else if (plan is null)
+{
+    <div class="alert alert-info">
+        Für KW @calendarWeek / @year existiert noch kein Wochenplan.
+    </div>
+
+    <button class="btn btn-success"
+            @onclick="CreatePlan">
+        Wochenplan anlegen
+    </button>
+}
+else
+{
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0">
+            KW @plan.CalendarWeek / @plan.Year
+        </h4>
+
+        <button class="btn btn-success"
+                disabled="@saving"
+                @onclick="SaveWeek">
+            @if (saving)
+            {
+                <span>Speichere...</span>
+            }
+            else
+            {
+                <span>Woche speichern</span>
+            }
+        </button>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-bordered align-middle">
+            <thead>
+                <tr>
+                    <th style="width: 200px;">Tag</th>
+                    <th>Gericht</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                @foreach (var day in days)
+                {
+                    <tr>
+                        <td>
+                            <strong>@GetDayName(day.Date)</strong>
+
+                            <br />
+
+                            <small class="text-muted">
+                                @day.Date.ToString("dd.MM.yyyy")
+                            </small>
+                        </td>
+
+                        <td>
+                            <select class="form-select"
+                                    @bind="day.SelectedMealId">
+
+                                <option value="">
+                                    -- kein Gericht --
+                                </option>
+
+                                @foreach (var meal in meals.OrderBy(x => x.Name))
+                                {
+                                    <option value="@meal.Id">
+                                        @meal.Name
+                                    </option>
+                                }
+
+                            </select>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="d-flex justify-content-end mt-3">
+        <button class="btn btn-success"
+                disabled="@saving"
+                @onclick="SaveWeek">
+            @if (saving)
+            {
+                <span>Speichere...</span>
+            }
+            else
+            {
+                <span>Woche speichern</span>
+            }
+        </button>
+    </div>
+}
+
+@code
+{
+    private int year;
+    private int calendarWeek;
+
+    private bool loading;
+    private bool saving;
+
+    private string? errorMessage;
+    private string? successMessage;
+
+    private WeeklyMealPlanDto? plan;
+
+    private List<MealDto> meals = new();
+    private List<DayViewModel> days = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var today = DateTime.Today;
+
+        year = ISOWeek.GetYear(today);
+        calendarWeek = ISOWeek.GetWeekOfYear(today);
+
+        await LoadMeals();
+        await LoadPlan();
+    }
+
+    private HttpClient CreateClient()
+    {
+        return HttpClientFactory.CreateClient("FamilyHubApi");
+    }
+
+    private async Task LoadMeals()
+    {
+        try
+        {
+            var client = CreateClient();
+
+            meals =
+                await client.GetFromJsonAsync<List<MealDto>>(
+                    "/api/meals")
+                ?? new List<MealDto>();
+        }
+        catch (Exception ex)
+        {
+            errorMessage =
+                $"Gerichte konnten nicht geladen werden: {ex.Message}";
+        }
+    }
+
+    private async Task LoadPlan()
+    {
+        loading = true;
+
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var client = CreateClient();
+
+            var response = await client.GetAsync(
+                $"/api/mealplans/{year}/{calendarWeek}");
+
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                plan = null;
+                BuildDays();
+                return;
+            }
+
+            response.EnsureSuccessStatusCode();
+
+            plan =
+                await response.Content
+                    .ReadFromJsonAsync<WeeklyMealPlanDto>();
+
+            BuildDays();
+        }
+        catch (Exception ex)
+        {
+            errorMessage =
+                $"Wochenplan konnte nicht geladen werden: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task CreatePlan()
+    {
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var client = CreateClient();
+
+            var response = await client.PostAsJsonAsync(
+                "/api/mealplans",
+                new
+                {
+                    Year = year,
+                    CalendarWeek = calendarWeek
+                });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                errorMessage =
+                    await ReadErrorMessage(
+                        response,
+                        "Der Wochenplan konnte nicht angelegt werden.");
+
+                return;
+            }
+
+            await LoadPlan();
+
+            successMessage =
+                $"KW {calendarWeek} / {year} wurde angelegt.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private void BuildDays()
+    {
+        days.Clear();
+
+        var monday =
+            ISOWeek.ToDateTime(
+                year,
+                calendarWeek,
+                DayOfWeek.Monday);
+
+        for (var i = 0; i < 7; i++)
+        {
+            var date =
+                DateOnly.FromDateTime(
+                    monday.AddDays(i));
+
+            var entry = plan?.Entries
+                .SingleOrDefault(x =>
+                    x.Date == date);
+
+            days.Add(
+                new DayViewModel
+                {
+                    Date = date,
+                    SelectedMealId =
+                        entry?.MealId.ToString()
+                        ?? string.Empty
+                });
+        }
+    }
+
+    private async Task SaveWeek()
+    {
+        saving = true;
+
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            var client = CreateClient();
+
+            var entries =
+                days.Select(day =>
+                {
+                    Guid? mealId = null;
+
+                    if (Guid.TryParse(
+                            day.SelectedMealId,
+                            out var parsedMealId))
+                    {
+                        mealId = parsedMealId;
+                    }
+
+                    return new SaveWeekEntryRequest
+                    {
+                        Date = day.Date,
+                        MealId = mealId
+                    };
+                })
+                .ToList();
+
+            var request =
+                new SaveWeekRequest
+                {
+                    Entries = entries
+                };
+
+            var response =
+                await client.PutAsJsonAsync(
+                    $"/api/mealplans/{year}/{calendarWeek}",
+                    request);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                errorMessage =
+                    await ReadErrorMessage(
+                        response,
+                        "Die Woche konnte nicht gespeichert werden.");
+
+                return;
+            }
+
+            await LoadPlan();
+
+            successMessage =
+                "Die Woche wurde erfolgreich gespeichert.";
+        }
+        catch (Exception ex)
+        {
+            errorMessage =
+                $"Die Woche konnte nicht gespeichert werden: {ex.Message}";
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private static async Task<string> ReadErrorMessage(
+        HttpResponseMessage response,
+        string fallbackMessage)
+    {
+        try
+        {
+            var error =
+                await response.Content
+                    .ReadFromJsonAsync<ApiError>();
+
+            if (!string.IsNullOrWhiteSpace(
+                    error?.Message))
+            {
+                return error.Message;
+            }
+        }
+        catch
+        {
+        }
+
+        return fallbackMessage;
+    }
+
+    private static string GetDayName(
+        DateOnly date)
+    {
+        return date.DayOfWeek switch
+        {
+            DayOfWeek.Monday =>
+                "Montag",
+
+            DayOfWeek.Tuesday =>
+                "Dienstag",
+
+            DayOfWeek.Wednesday =>
+                "Mittwoch",
+
+            DayOfWeek.Thursday =>
+                "Donnerstag",
+
+            DayOfWeek.Friday =>
+                "Freitag",
+
+            DayOfWeek.Saturday =>
+                "Samstag",
+
+            DayOfWeek.Sunday =>
+                "Sonntag",
+
+            _ =>
+                string.Empty
+        };
+    }
+
+    private sealed class DayViewModel
+    {
+        public DateOnly Date { get; set; }
+
+        public string SelectedMealId { get; set; }
+            = string.Empty;
+    }
+
+    private sealed class WeeklyMealPlanDto
+    {
+        public Guid Id { get; set; }
+
+        public int Year { get; set; }
+
+        public int CalendarWeek { get; set; }
+
+        public List<MealPlanEntryDto> Entries { get; set; }
+            = new();
+    }
+
+    private sealed class MealPlanEntryDto
+    {
+        public Guid Id { get; set; }
+
+        public Guid WeeklyMealPlanId { get; set; }
+
+        public DateOnly Date { get; set; }
+
+        public Guid MealId { get; set; }
+
+        public MealDto Meal { get; set; }
+            = new();
+    }
+
+    private sealed class MealDto
+    {
+        public Guid Id { get; set; }
+
+        public string Name { get; set; }
+            = string.Empty;
+    }
+
+    private sealed class SaveWeekRequest
+    {
+        public List<SaveWeekEntryRequest> Entries { get; set; }
+            = new();
+    }
+
+    private sealed class SaveWeekEntryRequest
+    {
+        public DateOnly Date { get; set; }
+
+        public Guid? MealId { get; set; }
+    }
+
+    private sealed class ApiError
+    {
+        public string Message { get; set; }
+            = string.Empty;
+    }
+}
