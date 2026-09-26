@@ -6,6 +6,10 @@ namespace FamilyHub.Domain.Meals
 {
     public class Meal
     {
+        private Meal()
+        {
+        }
+
         public Meal(string name)
         {
             if (string.IsNullOrWhiteSpace(name))
@@ -19,6 +23,6 @@ namespace FamilyHub.Domain.Meals
 
         public Guid Id { get; private set; }
 
-        public string Name { get; private set; }
+        public string Name { get; private set; } = string.Empty;
     }
 }

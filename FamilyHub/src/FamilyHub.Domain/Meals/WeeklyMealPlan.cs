@@ -1,13 +1,29 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Globalization;
+﻿using System.Globalization;
 
 namespace FamilyHub.Domain.Meals;
 
 public class WeeklyMealPlan
 {
-    private readonly List<MealPlanEntry> _entries = new List<MealPlanEntry>();
+    private readonly List<MealPlanEntry> _entries = new();
+
+    private WeeklyMealPlan()
+    {
+    }
+
+    public WeeklyMealPlan(int year, int calendarWeek)
+    {
+        if (calendarWeek < 1 ||
+            calendarWeek > ISOWeek.GetWeeksInYear(year))
+        {
+            throw new ArgumentOutOfRangeException(nameof(calendarWeek));
+        }
+
+        Id = Guid.NewGuid();
+        Year = year;
+        CalendarWeek = calendarWeek;
+    }
+
+    public Guid Id { get; private set; }
 
     public int Year { get; private set; }
 
@@ -15,41 +31,24 @@ public class WeeklyMealPlan
 
     public IReadOnlyList<MealPlanEntry> Entries => _entries;
 
-    public WeeklyMealPlan(int year, int calendarWeek)
-    {
-        if (calendarWeek < 1 || calendarWeek > ISOWeek.GetWeeksInYear(year))
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(calendarWeek),
-                $"Die Kalenderwoche muss zwischen 1 und {ISOWeek.GetWeeksInYear(year)} liegen.");
-        }
-
-        Year = year;
-        CalendarWeek = calendarWeek;
-    }
-
     public void AddMeal(DateOnly date, Meal meal)
     {
         var dateTime = date.ToDateTime(TimeOnly.MinValue);
 
-        var calendarWeek = ISOWeek.GetWeekOfYear(dateTime);
-        var year = ISOWeek.GetYear(dateTime);
-
-        if (year != Year || calendarWeek != CalendarWeek)
+        if (ISOWeek.GetYear(dateTime) != Year ||
+            ISOWeek.GetWeekOfYear(dateTime) != CalendarWeek)
         {
             throw new ArgumentException(
-                $"Das Datum {date:dd.MM.yyyy} gehört nicht zur KW {CalendarWeek}/{Year}.",
+                "Das Datum gehört nicht zu diesem Wochenplan.",
                 nameof(date));
         }
 
-        if (_entries.Any(entry => entry.Datum == date))
+        if (_entries.Any(x => x.Date == date))
         {
             throw new InvalidOperationException(
-                $"Für den {date:dd.MM.yyyy} ist bereits ein Gericht eingetragen.");
+                "Für diesen Tag ist bereits ein Gericht eingetragen.");
         }
 
-        var entry = new MealPlanEntry(date, meal);
-
-        _entries.Add(entry);
+        _entries.Add(new MealPlanEntry(Id, date, meal));
     }
 }

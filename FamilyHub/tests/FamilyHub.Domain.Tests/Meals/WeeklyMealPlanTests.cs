@@ -18,8 +18,8 @@ public class WeeklyMealPlanTests
 
         // Assert
         Assert.Single(plan.Entries);
-        Assert.Equal(date, plan.Entries[0].Datum);
-        Assert.Equal(meal, plan.Entries[0].Essen);
+        Assert.Equal(date, plan.Entries[0].Date);
+        Assert.Equal(meal, plan.Entries[0].Meal);
     }
 
     [Fact]

@@ -1,22 +1,36 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Reflection.Emit;
-using System.Text;
-using static System.Runtime.InteropServices.JavaScript.JSType;
+﻿namespace FamilyHub.Domain.Meals;
 
-namespace FamilyHub.Domain.Meals
+public class MealPlanEntry
 {
-    public class MealPlanEntry
+    private MealPlanEntry()
     {
-        public MealPlanEntry(DateOnly date, Meal meal)
-        {
-            ArgumentNullException.ThrowIfNull(meal);
-
-            Datum = date;
-            Essen = meal;
-        }
-        public DateOnly Datum { get; private set; }
-
-        public Meal Essen { get; private set; }
     }
+
+    public MealPlanEntry(
+        Guid weeklyMealPlanId,
+        DateOnly date,
+        Meal meal)
+    {
+        Meal = meal ?? throw new ArgumentNullException(nameof(meal));
+
+        Id = Guid.NewGuid();
+        WeeklyMealPlanId = weeklyMealPlanId;
+        Date = date;
+        MealId = meal.Id;
+    }
+
+    public void ChangeMeal(Meal meal)
+    {
+        Meal = meal ?? throw new ArgumentNullException(nameof(meal));
+        MealId = meal.Id;
+    }
+    public Guid Id { get; private set; }
+
+    public Guid WeeklyMealPlanId { get; private set; }
+
+    public DateOnly Date { get; private set; }
+
+    public Guid MealId { get; private set; }
+
+    public Meal Meal { get; private set; } = null!;
 }
