@@ -37,13 +37,139 @@ else
     <ul class="list-group">
         @foreach (var meal in meals)
         {
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-                <span>@meal.Name</span>
+            <li class="list-group-item">
 
-                <button class="btn btn-outline-danger btn-sm"
-                        @onclick="() => DeleteMeal(meal.Id)">
-                    Löschen
-                </button>
+                <div class="d-flex justify-content-between align-items-center">
+                    <span>@meal.Name</span>
+
+                    <div>
+                        <button class="btn btn-outline-primary btn-sm me-2"
+                                @onclick="() => EditComponents(meal.Id)">
+                            Bestandteile
+                        </button>
+
+                        <button class="btn btn-outline-danger btn-sm"
+                                @onclick="() => DeleteMeal(meal.Id)">
+                            Löschen
+                        </button>
+                    </div>
+                </div>
+
+                @if (editingMealId == meal.Id)
+                {
+                    <div class="mt-3 border-top pt-3">
+
+                        <h6>Bestandteile</h6>
+
+                        @* Neuen Bestandteil anlegen *@
+                        <div class="input-group mb-3">
+                            <input class="form-control"
+                                   @bind="newComponentName"
+                                   placeholder="Neuer Bestandteil, z.B. Rahmsoße" />
+
+                            <button class="btn btn-outline-primary"
+                                    @onclick="CreateComponent">
+                                Neu anlegen
+                            </button>
+                        </div>
+
+                        @if (mealComponents is null)
+                        {
+                            <p>Bestandteile werden geladen...</p>
+                        }
+                        else
+                        {
+                            @* Bereits ausgewählte Bestandteile *@
+                            var selectedComponents = mealComponents
+                                .Where(x => selectedComponentIds.Contains(x.Id))
+                                .OrderBy(x => x.Name)
+                                .ToList();
+
+                            @if (selectedComponents.Count == 0)
+                            {
+                                <p class="text-muted">
+                                    Diesem Gericht sind noch keine Bestandteile zugeordnet.
+                                </p>
+                            }
+                            else
+                            {
+                                <div class="mb-3">
+
+                                    @foreach (var component in selectedComponents)
+                                    {
+                                        <div class="d-flex justify-content-between
+                                            align-items-center
+                                            border rounded
+                                            p-2 mb-2">
+
+                                            <span>
+                                                @component.Name
+                                            </span>
+
+                                            <button class="btn btn-outline-danger btn-sm"
+                                                    @onclick="() => RemoveComponentFromSelection(component.Id)">
+                                                Entfernen
+                                            </button>
+
+                                        </div>
+                                    }
+
+                                </div>
+                            }
+
+                            @* Vorhandenen Bestandteil auswählen *@
+                            var availableComponents = mealComponents
+                                .Where(x => !selectedComponentIds.Contains(x.Id))
+                                .OrderBy(x => x.Name)
+                                .ToList();
+
+                            @if (availableComponents.Count > 0)
+                            {
+                                <div class="input-group mb-3">
+
+                                    <select class="form-select"
+                                            @bind="componentToAddId">
+
+                                        <option value="">
+                                            Vorhandenen Bestandteil auswählen...
+                                        </option>
+
+                                        @foreach (var component in availableComponents)
+                                        {
+                                            <option value="@component.Id">
+                                                @component.Name
+                                            </option>
+                                        }
+
+                                    </select>
+
+                                    <button class="btn btn-outline-primary"
+                                            @onclick="AddExistingComponent"
+                                            disabled="@(componentToAddId is null)">
+                                        Hinzufügen
+                                    </button>
+
+                                </div>
+                            }
+                        }
+
+                        <div class="mt-3">
+
+                            <button class="btn btn-success btn-sm me-2"
+                                    @onclick="() => SaveComponents(meal.Id)">
+                                Speichern
+                            </button>
+
+                            <button class="btn btn-secondary btn-sm"
+                                    @onclick="CancelEditComponents">
+                                Abbrechen
+                            </button>
+
+                        </div>
+
+                    </div>
+                }
+
             </li>
         }
     </ul>
@@ -51,18 +177,38 @@ else
 
 @code {
     private List<MealDto>? meals;
+
+    private List<MealComponentDto>? mealComponents;
+
     private string newMealName = string.Empty;
+
+    private string newComponentName = string.Empty;
+
     private string? errorMessage;
+
+    private Guid? editingMealId;
+
+    private Guid? componentToAddId;
+
+    private HashSet<Guid> selectedComponentIds = new();
+
 
     protected override async Task OnInitializedAsync()
     {
         await LoadMeals();
+        await LoadMealComponents();
     }
+
 
     private HttpClient CreateClient()
     {
         return HttpClientFactory.CreateClient("FamilyHubApi");
     }
+
+
+    // ---------------------------------------------------------
+    // Meals
+    // ---------------------------------------------------------
 
     private async Task LoadMeals()
     {
@@ -80,6 +226,7 @@ else
             errorMessage = ex.Message;
         }
     }
+
 
     private async Task CreateMeal()
     {
@@ -113,6 +260,7 @@ else
         }
     }
 
+
     private async Task DeleteMeal(Guid id)
     {
         errorMessage = null;
@@ -143,12 +291,206 @@ else
         }
     }
 
+
+    // ---------------------------------------------------------
+    // Meal Components
+    // ---------------------------------------------------------
+
+    private async Task LoadMealComponents()
+    {
+        try
+        {
+            var client = CreateClient();
+
+            mealComponents =
+                await client.GetFromJsonAsync<List<MealComponentDto>>(
+                    "/api/mealcomponents");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+
+    private async Task EditComponents(Guid mealId)
+    {
+        errorMessage = null;
+
+        // Wenn das Gericht bereits geöffnet ist:
+        // wieder zuklappen.
+        if (editingMealId == mealId)
+        {
+            editingMealId = null;
+            selectedComponentIds.Clear();
+            newComponentName = string.Empty;
+            componentToAddId = null;
+
+            return;
+        }
+
+        try
+        {
+            var client = CreateClient();
+
+            var components =
+                await client.GetFromJsonAsync<List<MealComponentDto>>(
+                    $"/api/meals/{mealId}/components");
+
+            selectedComponentIds =
+                components?
+                    .Select(x => x.Id)
+                    .ToHashSet()
+                ?? new HashSet<Guid>();
+
+            editingMealId = mealId;
+
+            newComponentName = string.Empty;
+
+            componentToAddId = null;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+
+    private async Task CreateComponent()
+    {
+        if (string.IsNullOrWhiteSpace(newComponentName))
+        {
+            return;
+        }
+
+        errorMessage = null;
+
+        try
+        {
+            var client = CreateClient();
+
+            var response = await client.PostAsJsonAsync(
+                "/api/mealcomponents",
+                new
+                {
+                    name = newComponentName
+                });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var content =
+                    await response.Content.ReadAsStringAsync();
+
+                errorMessage =
+                    $"Bestandteil konnte nicht angelegt werden: {content}";
+
+                return;
+            }
+
+            var createdComponent =
+                await response.Content
+                    .ReadFromJsonAsync<MealComponentDto>();
+
+            newComponentName = string.Empty;
+
+            await LoadMealComponents();
+
+            // Neu angelegten Bestandteil direkt
+            // dem aktuellen Gericht hinzufügen.
+            if (createdComponent is not null)
+            {
+                selectedComponentIds.Add(
+                    createdComponent.Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+
+    private void AddExistingComponent()
+    {
+        if (componentToAddId is null)
+        {
+            return;
+        }
+
+        selectedComponentIds.Add(
+            componentToAddId.Value);
+
+        componentToAddId = null;
+    }
+
+
+    private void RemoveComponentFromSelection(
+        Guid componentId)
+    {
+        selectedComponentIds.Remove(componentId);
+    }
+
+
+    private async Task SaveComponents(Guid mealId)
+    {
+        errorMessage = null;
+
+        try
+        {
+            var client = CreateClient();
+
+            var response = await client.PutAsJsonAsync(
+                $"/api/meals/{mealId}/components",
+                new
+                {
+                    componentIds =
+                        selectedComponentIds.ToList()
+                });
+
+            response.EnsureSuccessStatusCode();
+
+            // Absichtlich NICHT schließen.
+            // Das Gericht bleibt nach dem Speichern geöffnet.
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+
+    private void CancelEditComponents()
+    {
+        editingMealId = null;
+
+        selectedComponentIds.Clear();
+
+        newComponentName = string.Empty;
+
+        componentToAddId = null;
+    }
+
+
+    // ---------------------------------------------------------
+    // DTOs
+    // ---------------------------------------------------------
+
     private sealed class MealDto
     {
         public Guid Id { get; set; }
 
         public string Name { get; set; } = string.Empty;
     }
+
+
+    private sealed class MealComponentDto
+    {
+        public Guid Id { get; set; }
+
+        public string Name { get; set; } = string.Empty;
+    }
+
+
     private sealed class ApiError
     {
         public string Message { get; set; } = string.Empty;
