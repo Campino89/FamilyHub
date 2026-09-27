@@ -1,6 +1,4 @@
-﻿using FamilyHub.Domain.SideDishes;
-
-namespace FamilyHub.Domain.Meals;
+﻿namespace FamilyHub.Domain.Meals;
 
 public class MealPlanEntry
 {

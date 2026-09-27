@@ -1,5 +1,4 @@
-﻿using FamilyHub.Domain.MealComponents;
-using FamilyHub.Domain.Meals;
+﻿using FamilyHub.Domain.Meals;
 
 namespace FamilyHub.Domain.Tests.Meals;
 

@@ -1,4 +1,4 @@
-﻿using FamilyHub.Domain.MealComponents;
+﻿using FamilyHub.Domain.Meals;
 using FamilyHub.Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;

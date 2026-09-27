@@ -1,4 +1,4 @@
-﻿using FamilyHub.Domain.SideDishes;
+﻿using FamilyHub.Domain.Meals;
 
 namespace FamilyHub.Domain.SideDishTests;
 

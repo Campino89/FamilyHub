@@ -1,4 +1,4 @@
-﻿namespace FamilyHub.Domain.SideDishes;
+﻿namespace FamilyHub.Domain.Meals;
 
 public class SideDish
 {

@@ -1,6 +1,4 @@
-﻿using FamilyHub.Domain.Meals;
-
-namespace FamilyHub.Domain.MealComponents;
+﻿namespace FamilyHub.Domain.Meals;
 
 public class MealComponent
 {

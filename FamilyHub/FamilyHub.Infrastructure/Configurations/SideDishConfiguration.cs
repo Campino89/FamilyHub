@@ -1,4 +1,4 @@
-﻿using FamilyHub.Domain.SideDishes;
+﻿using FamilyHub.Domain.Meals;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 

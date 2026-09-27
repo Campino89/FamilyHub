@@ -1,6 +1,5 @@
-﻿using FamilyHub.Domain.SideDishes;
+﻿using FamilyHub.Domain.Meals;
 using FamilyHub.Infrastructure.Data;
-using FamilyHub.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
