@@ -162,6 +162,67 @@ public class MealsController : ControllerBase
 
         return NoContent();
     }
+
+    [HttpPut("{mealId:guid}/components")]
+    public async Task<ActionResult> SetComponents(
+    Guid mealId,
+    SetMealComponentsRequest request)
+    {
+        var meal = await _dbContext.Meals
+            .Include(x => x.Components)
+            .FirstOrDefaultAsync(x => x.Id == mealId);
+
+        if (meal is null)
+            return NotFound("Gericht wurde nicht gefunden.");
+
+        var componentIds = request.ComponentIds
+            .Distinct()
+            .ToList();
+
+        var components = await _dbContext.MealComponents
+            .Where(x => componentIds.Contains(x.Id))
+            .ToListAsync();
+
+        if (components.Count != componentIds.Count)
+            return BadRequest(
+                "Mindestens eine angegebene Komponente wurde nicht gefunden.");
+
+        var existingComponents = meal.Components.ToList();
+
+        foreach (var component in existingComponents)
+            meal.RemoveComponent(component);
+
+        foreach (var component in components)
+            meal.AddComponent(component);
+
+        await _dbContext.SaveChangesAsync();
+
+        return NoContent();
+    }
+
+    [HttpGet("{mealId:guid}/components")]
+    public async Task<ActionResult> GetComponents(Guid mealId)
+    {
+        var meal = await _dbContext.Meals
+            .Include(x => x.Components)
+            .FirstOrDefaultAsync(x => x.Id == mealId);
+
+        if (meal is null)
+            return NotFound();
+
+        var components = meal.Components
+            .OrderBy(x => x.Name)
+            .Select(x => new
+            {
+                x.Id,
+                x.Name
+            });
+
+        return Ok(components);
+    }
 }
 
 public record CreateMealRequest(string Name);
+
+public record SetMealComponentsRequest(
+    List<Guid> ComponentIds);

@@ -15,6 +15,10 @@ public class MealConfiguration : IEntityTypeConfiguration<Meal>
         builder.Property(x => x.Name)
             .IsRequired()
             .HasMaxLength(200);
+        builder
+            .HasMany(x => x.Components)
+            .WithMany(x => x.Meals)
+            .UsingEntity(j => j.ToTable("MealMealComponents"));
 
         builder.HasIndex(x => x.Name)
             .IsUnique();
