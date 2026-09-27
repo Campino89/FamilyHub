@@ -88,7 +88,7 @@ else
             <thead>
                 <tr>
                     <th style="width: 200px;">Tag</th>
-                    <th>Gericht</th>
+                    <th>Gericht und Beilagen</th>
                 </tr>
             </thead>
 
@@ -96,7 +96,7 @@ else
                 @foreach (var day in days)
                 {
                     <tr>
-                        <td>
+                        <td class="align-top">
                             <strong>@GetDayName(day.Date)</strong>
 
                             <br />
@@ -108,7 +108,8 @@ else
 
                         <td>
                             <select class="form-select"
-                                    @bind="day.SelectedMealId">
+                                    @bind="day.SelectedMealId"
+                                    @bind:after="() => MealChanged(day)">
 
                                 <option value="">
                                     -- kein Gericht --
@@ -122,6 +123,126 @@ else
                                 }
 
                             </select>
+
+                            @if (!string.IsNullOrWhiteSpace(day.SelectedMealId))
+                            {
+                                <div class="mt-3 border-top pt-3">
+
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <strong>Beilagen</strong>
+
+                                        <button class="btn btn-outline-secondary btn-sm"
+                                                type="button"
+                                                @onclick="() => ToggleSideDishes(day)">
+                                            @(day.ShowSideDishes
+                                                ? "Beilagen schließen"
+                                                : "Beilagen bearbeiten")
+                                        </button>
+                                    </div>
+
+                                    @if (day.SelectedSideDishIds.Count > 0)
+                                    {
+                                        <div class="mb-2">
+                                            @foreach (var sideDish in GetSelectedSideDishes(day))
+                                            {
+                                                <span class="badge text-bg-secondary me-1 mb-1">
+                                                    @sideDish.Name
+                                                </span>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="text-muted small mb-2">
+                                            Keine Beilagen ausgewählt.
+                                        </div>
+                                    }
+
+                                    @if (day.ShowSideDishes)
+                                    {
+                                        <div class="border rounded p-3">
+
+                                            @{
+                                                var availableSideDishes =
+                                                    GetAvailableSideDishes(day);
+                                            }
+
+                                            @if (availableSideDishes.Count > 0)
+                                            {
+                                                <div class="input-group mb-3">
+
+                                                    <select class="form-select"
+                                                            @bind="day.SideDishToAddId">
+
+                                                        <option value="">
+                                                            Vorhandene Beilage auswählen...
+                                                        </option>
+
+                                                        @foreach (var sideDish in availableSideDishes)
+                                                        {
+                                                            <option value="@sideDish.Id">
+                                                                @sideDish.Name
+                                                            </option>
+                                                        }
+
+                                                    </select>
+
+                                                    <button class="btn btn-outline-primary"
+                                                            type="button"
+                                                            disabled="@(day.SideDishToAddId is null)"
+                                                            @onclick="() => AddExistingSideDish(day)">
+                                                        Hinzufügen
+                                                    </button>
+
+                                                </div>
+                                            }
+
+                                            @if (day.SelectedSideDishIds.Count > 0)
+                                            {
+                                                <div class="mb-3">
+
+                                                    @foreach (var sideDish in GetSelectedSideDishes(day))
+                                                    {
+                                                        <div class="d-flex justify-content-between
+                                                            align-items-center
+                                                            border rounded
+                                                            p-2 mb-2">
+
+                                                            <span>
+                                                                @sideDish.Name
+                                                            </span>
+
+                                                            <button class="btn btn-outline-danger btn-sm"
+                                                                    type="button"
+                                                                    @onclick="() => RemoveSideDish(day, sideDish.Id)">
+                                                                Entfernen
+                                                            </button>
+
+                                                        </div>
+                                                    }
+
+                                                </div>
+                                            }
+
+                                            <div class="input-group">
+
+                                                <input class="form-control"
+                                                       @bind="day.NewSideDishName"
+                                                       placeholder="Neue Beilage, z.B. Reis" />
+
+                                                <button class="btn btn-outline-primary"
+                                                        type="button"
+                                                        @onclick="() => CreateSideDish(day)">
+                                                    Neu anlegen
+                                                </button>
+
+                                            </div>
+
+                                        </div>
+                                    }
+
+                                </div>
+                            }
                         </td>
                     </tr>
                 }
@@ -159,7 +280,11 @@ else
     private WeeklyMealPlanDto? plan;
 
     private List<MealDto> meals = new();
+
+    private List<SideDishDto> sideDishes = new();
+
     private List<DayViewModel> days = new();
+
 
     protected override async Task OnInitializedAsync()
     {
@@ -169,13 +294,20 @@ else
         calendarWeek = ISOWeek.GetWeekOfYear(today);
 
         await LoadMeals();
+        await LoadSideDishes();
         await LoadPlan();
     }
+
 
     private HttpClient CreateClient()
     {
         return HttpClientFactory.CreateClient("FamilyHubApi");
     }
+
+
+    // ---------------------------------------------------------
+    // Meals
+    // ---------------------------------------------------------
 
     private async Task LoadMeals()
     {
@@ -195,6 +327,168 @@ else
         }
     }
 
+
+    // ---------------------------------------------------------
+    // Side Dishes
+    // ---------------------------------------------------------
+
+    private async Task LoadSideDishes()
+    {
+        try
+        {
+            var client = CreateClient();
+
+            sideDishes =
+                await client.GetFromJsonAsync<List<SideDishDto>>(
+                    "/api/sidedishes")
+                ?? new List<SideDishDto>();
+        }
+        catch (Exception ex)
+        {
+            errorMessage =
+                $"Beilagen konnten nicht geladen werden: {ex.Message}";
+        }
+    }
+
+
+    private void ToggleSideDishes(DayViewModel day)
+    {
+        day.ShowSideDishes = !day.ShowSideDishes;
+
+        if (!day.ShowSideDishes)
+        {
+            day.SideDishToAddId = null;
+            day.NewSideDishName = string.Empty;
+        }
+    }
+
+
+    private List<SideDishDto> GetSelectedSideDishes(
+        DayViewModel day)
+    {
+        return sideDishes
+            .Where(x =>
+                day.SelectedSideDishIds.Contains(x.Id))
+            .OrderBy(x => x.Name)
+            .ToList();
+    }
+
+
+    private List<SideDishDto> GetAvailableSideDishes(
+        DayViewModel day)
+    {
+        return sideDishes
+            .Where(x =>
+                !day.SelectedSideDishIds.Contains(x.Id))
+            .OrderBy(x => x.Name)
+            .ToList();
+    }
+
+
+    private void AddExistingSideDish(
+        DayViewModel day)
+    {
+        if (day.SideDishToAddId is null)
+        {
+            return;
+        }
+
+        day.SelectedSideDishIds.Add(
+            day.SideDishToAddId.Value);
+
+        day.SideDishToAddId = null;
+    }
+
+
+    private void RemoveSideDish(
+        DayViewModel day,
+        Guid sideDishId)
+    {
+        day.SelectedSideDishIds.Remove(
+            sideDishId);
+    }
+
+
+    private async Task CreateSideDish(
+        DayViewModel day)
+    {
+        if (string.IsNullOrWhiteSpace(
+                day.NewSideDishName))
+        {
+            return;
+        }
+
+        errorMessage = null;
+
+        try
+        {
+            var client = CreateClient();
+
+            var response =
+                await client.PostAsJsonAsync(
+                    "/api/sidedishes",
+                    new
+                    {
+                        name = day.NewSideDishName
+                    });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                errorMessage =
+                    await ReadErrorMessage(
+                        response,
+                        "Die Beilage konnte nicht angelegt werden.");
+
+                return;
+            }
+
+            var createdSideDish =
+                await response.Content
+                    .ReadFromJsonAsync<SideDishDto>();
+
+            day.NewSideDishName =
+                string.Empty;
+
+            await LoadSideDishes();
+
+            if (createdSideDish is not null)
+            {
+                day.SelectedSideDishIds.Add(
+                    createdSideDish.Id);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage =
+                $"Die Beilage konnte nicht angelegt werden: {ex.Message}";
+        }
+    }
+
+
+    private void MealChanged(
+        DayViewModel day)
+    {
+        // Wenn das Gericht entfernt wird,
+        // können auch keine Beilagen mehr dazugehören.
+        if (string.IsNullOrWhiteSpace(
+                day.SelectedMealId))
+        {
+            day.SelectedSideDishIds.Clear();
+
+            day.SideDishToAddId = null;
+
+            day.NewSideDishName =
+                string.Empty;
+
+            day.ShowSideDishes = false;
+        }
+    }
+
+
+    // ---------------------------------------------------------
+    // Meal Plan
+    // ---------------------------------------------------------
+
     private async Task LoadPlan()
     {
         loading = true;
@@ -206,13 +500,17 @@ else
         {
             var client = CreateClient();
 
-            var response = await client.GetAsync(
-                $"/api/mealplans/{year}/{calendarWeek}");
+            var response =
+                await client.GetAsync(
+                    $"/api/mealplans/{year}/{calendarWeek}");
 
-            if (response.StatusCode == HttpStatusCode.NotFound)
+            if (response.StatusCode ==
+                HttpStatusCode.NotFound)
             {
                 plan = null;
+
                 BuildDays();
+
                 return;
             }
 
@@ -235,6 +533,7 @@ else
         }
     }
 
+
     private async Task CreatePlan()
     {
         errorMessage = null;
@@ -244,13 +543,14 @@ else
         {
             var client = CreateClient();
 
-            var response = await client.PostAsJsonAsync(
-                "/api/mealplans",
-                new
-                {
-                    Year = year,
-                    CalendarWeek = calendarWeek
-                });
+            var response =
+                await client.PostAsJsonAsync(
+                    "/api/mealplans",
+                    new
+                    {
+                        Year = year,
+                        CalendarWeek = calendarWeek
+                    });
 
             if (!response.IsSuccessStatusCode)
             {
@@ -273,6 +573,7 @@ else
         }
     }
 
+
     private void BuildDays()
     {
         days.Clear();
@@ -289,20 +590,29 @@ else
                 DateOnly.FromDateTime(
                     monday.AddDays(i));
 
-            var entry = plan?.Entries
-                .SingleOrDefault(x =>
-                    x.Date == date);
+            var entry =
+                plan?.Entries
+                    .SingleOrDefault(x =>
+                        x.Date == date);
 
             days.Add(
                 new DayViewModel
                 {
                     Date = date,
+
                     SelectedMealId =
                         entry?.MealId.ToString()
-                        ?? string.Empty
+                        ?? string.Empty,
+
+                    SelectedSideDishIds =
+                        entry?.SideDishes?
+                            .Select(x => x.Id)
+                            .ToHashSet()
+                        ?? new HashSet<Guid>()
                 });
         }
     }
+
 
     private async Task SaveWeek()
     {
@@ -314,6 +624,10 @@ else
         try
         {
             var client = CreateClient();
+
+            // -------------------------------------------------
+            // 1. Gerichte der Woche speichern
+            // -------------------------------------------------
 
             var entries =
                 days.Select(day =>
@@ -356,6 +670,42 @@ else
                 return;
             }
 
+            // -------------------------------------------------
+            // 2. Beilagen für jeden belegten Tag speichern
+            // -------------------------------------------------
+
+            foreach (var day in days)
+            {
+                if (string.IsNullOrWhiteSpace(
+                        day.SelectedMealId))
+                {
+                    continue;
+                }
+
+                var sideDishResponse =
+                    await client.PutAsJsonAsync(
+                        $"/api/mealplans/{year}/{calendarWeek}/entries/{day.Date:yyyy-MM-dd}/sidedishes",
+                        new
+                        {
+                            sideDishIds =
+                                day.SelectedSideDishIds.ToList()
+                        });
+
+                if (!sideDishResponse.IsSuccessStatusCode)
+                {
+                    errorMessage =
+                        await ReadErrorMessage(
+                            sideDishResponse,
+                            $"Die Beilagen für {GetDayName(day.Date)} konnten nicht gespeichert werden.");
+
+                    return;
+                }
+            }
+
+            // -------------------------------------------------
+            // 3. Aktuellen Stand neu laden
+            // -------------------------------------------------
+
             await LoadPlan();
 
             successMessage =
@@ -372,6 +722,11 @@ else
         }
     }
 
+
+    // ---------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------
+
     private static async Task<string> ReadErrorMessage(
         HttpResponseMessage response,
         string fallbackMessage)
@@ -387,6 +742,15 @@ else
             {
                 return error.Message;
             }
+
+            var content =
+                await response.Content
+                    .ReadAsStringAsync();
+
+            if (!string.IsNullOrWhiteSpace(content))
+            {
+                return content;
+            }
         }
         catch
         {
@@ -394,6 +758,7 @@ else
 
         return fallbackMessage;
     }
+
 
     private static string GetDayName(
         DateOnly date)
@@ -426,13 +791,29 @@ else
         };
     }
 
+
+    // ---------------------------------------------------------
+    // ViewModels / DTOs
+    // ---------------------------------------------------------
+
     private sealed class DayViewModel
     {
         public DateOnly Date { get; set; }
 
         public string SelectedMealId { get; set; }
             = string.Empty;
+
+        public HashSet<Guid> SelectedSideDishIds { get; set; }
+            = new();
+
+        public Guid? SideDishToAddId { get; set; }
+
+        public string NewSideDishName { get; set; }
+            = string.Empty;
+
+        public bool ShowSideDishes { get; set; }
     }
+
 
     private sealed class WeeklyMealPlanDto
     {
@@ -446,6 +827,7 @@ else
             = new();
     }
 
+
     private sealed class MealPlanEntryDto
     {
         public Guid Id { get; set; }
@@ -458,7 +840,11 @@ else
 
         public MealDto Meal { get; set; }
             = new();
+
+        public List<SideDishDto> SideDishes { get; set; }
+            = new();
     }
+
 
     private sealed class MealDto
     {
@@ -468,11 +854,22 @@ else
             = string.Empty;
     }
 
+
+    private sealed class SideDishDto
+    {
+        public Guid Id { get; set; }
+
+        public string Name { get; set; }
+            = string.Empty;
+    }
+
+
     private sealed class SaveWeekRequest
     {
         public List<SaveWeekEntryRequest> Entries { get; set; }
             = new();
     }
+
 
     private sealed class SaveWeekEntryRequest
     {
@@ -480,6 +877,7 @@ else
 
         public Guid? MealId { get; set; }
     }
+
 
     private sealed class ApiError
     {

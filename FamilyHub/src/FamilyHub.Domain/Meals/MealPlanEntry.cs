@@ -1,4 +1,6 @@
-﻿namespace FamilyHub.Domain.Meals;
+﻿using FamilyHub.Domain.SideDishes;
+
+namespace FamilyHub.Domain.Meals;
 
 public class MealPlanEntry
 {
@@ -33,4 +35,25 @@ public class MealPlanEntry
     public Guid MealId { get; private set; }
 
     public Meal Meal { get; private set; } = null!;
+
+    private readonly List<SideDish> _sideDishes = new();
+
+    public IReadOnlyCollection<SideDish> SideDishes => _sideDishes;
+
+    public void AddSideDish(SideDish sideDish)
+    {
+        ArgumentNullException.ThrowIfNull(sideDish);
+
+        if (_sideDishes.Any(x => x.Id == sideDish.Id))
+            return;
+
+        _sideDishes.Add(sideDish);
+    }
+
+    public void RemoveSideDish(SideDish sideDish)
+    {
+        ArgumentNullException.ThrowIfNull(sideDish);
+
+        _sideDishes.Remove(sideDish);
+    }
 }

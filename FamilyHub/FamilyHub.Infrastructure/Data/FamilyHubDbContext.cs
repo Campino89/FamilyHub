@@ -1,6 +1,7 @@
 ﻿using FamilyHub.Domain.MealComponents;
 using FamilyHub.Domain.Meals;
 using Microsoft.EntityFrameworkCore;
+using FamilyHub.Domain.SideDishes;
 
 namespace FamilyHub.Infrastructure.Data;
 
@@ -25,6 +26,8 @@ public class FamilyHubDbContext : DbContext
     public DbSet<WeeklyMealPlan> WeeklyMealPlans => Set<WeeklyMealPlan>();
 
     public DbSet<MealComponent> MealComponents => Set<MealComponent>();
+
+    public DbSet<SideDish> SideDishes => Set<SideDish>();
 
     protected override void OnConfiguring(
         DbContextOptionsBuilder optionsBuilder)

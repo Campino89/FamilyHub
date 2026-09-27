@@ -23,5 +23,9 @@ public class MealPlanEntryConfiguration
             .WithMany()
             .HasForeignKey(x => x.MealId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasMany(x => x.SideDishes)
+            .WithMany()
+            .UsingEntity(j => j.ToTable("MealPlanEntrySideDishes"));
     }
 }

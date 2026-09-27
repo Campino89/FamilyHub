@@ -50,7 +50,9 @@ public class MealPlansController : ControllerBase
         var plan = await _dbContext.WeeklyMealPlans
             .AsNoTracking()
             .Include(x => x.Entries)
-            .ThenInclude(x => x.Meal)
+                .ThenInclude(x => x.Meal)
+            .Include(x => x.Entries)
+                .ThenInclude(x => x.SideDishes)
             .SingleOrDefaultAsync(x =>
                 x.Year == year &&
                 x.CalendarWeek == calendarWeek);
@@ -66,9 +68,9 @@ public class MealPlansController : ControllerBase
 
     [HttpPost("{year:int}/{calendarWeek:int}/entries")]
     public async Task<ActionResult<MealPlanEntry>> AddEntry(
-    int year,
-    int calendarWeek,
-    AddMealPlanEntryRequest request)
+        int year,
+        int calendarWeek,
+        AddMealPlanEntryRequest request)
     {
         var plan = await _dbContext.WeeklyMealPlans
             .Include(x => x.Entries)
@@ -97,7 +99,6 @@ public class MealPlansController : ControllerBase
         var entry = plan.Entries
             .Single(x => x.Date == request.Date);
 
-        // Explizit als neuen Datensatz markieren
         _dbContext.MealPlanEntries.Add(entry);
 
         await _dbContext.SaveChangesAsync();
@@ -107,14 +108,14 @@ public class MealPlansController : ControllerBase
 
     [HttpPut("{year:int}/{calendarWeek:int}/entries/{date}")]
     public async Task<ActionResult<MealPlanEntry>> UpdateEntry(
-    int year,
-    int calendarWeek,
-    DateOnly date,
-    UpdateMealPlanEntryRequest request)
+        int year,
+        int calendarWeek,
+        DateOnly date,
+        UpdateMealPlanEntryRequest request)
     {
         var plan = await _dbContext.WeeklyMealPlans
             .Include(x => x.Entries)
-            .ThenInclude(x => x.Meal)
+                .ThenInclude(x => x.Meal)
             .SingleOrDefaultAsync(x =>
                 x.Year == year &&
                 x.CalendarWeek == calendarWeek);
@@ -133,7 +134,8 @@ public class MealPlansController : ControllerBase
         }
 
         var meal = await _dbContext.Meals
-            .SingleOrDefaultAsync(x => x.Id == request.MealId);
+            .SingleOrDefaultAsync(x =>
+                x.Id == request.MealId);
 
         if (meal is null)
         {
@@ -149,9 +151,9 @@ public class MealPlansController : ControllerBase
 
     [HttpDelete("{year:int}/{calendarWeek:int}/entries/{date}")]
     public async Task<IActionResult> DeleteEntry(
-    int year,
-    int calendarWeek,
-    DateOnly date)
+        int year,
+        int calendarWeek,
+        DateOnly date)
     {
         var plan = await _dbContext.WeeklyMealPlans
             .Include(x => x.Entries)
@@ -181,13 +183,13 @@ public class MealPlansController : ControllerBase
 
     [HttpPut("{year:int}/{calendarWeek:int}")]
     public async Task<IActionResult> SaveWeek(
-    int year,
-    int calendarWeek,
-    SaveWeekRequest request)
+        int year,
+        int calendarWeek,
+        SaveWeekRequest request)
     {
         var plan = await _dbContext.WeeklyMealPlans
             .Include(x => x.Entries)
-            .ThenInclude(x => x.Meal)
+                .ThenInclude(x => x.Meal)
             .SingleOrDefaultAsync(x =>
                 x.Year == year &&
                 x.CalendarWeek == calendarWeek);
@@ -196,7 +198,8 @@ public class MealPlansController : ControllerBase
         {
             return NotFound(new
             {
-                message = $"Für {year} / KW {calendarWeek} wurde kein Wochenplan gefunden."
+                message =
+                    $"Für {year} / KW {calendarWeek} wurde kein Wochenplan gefunden."
             });
         }
 
@@ -213,13 +216,15 @@ public class MealPlansController : ControllerBase
         foreach (var requestedEntry in request.Entries)
         {
             var existingEntry = plan.Entries
-                .SingleOrDefault(x => x.Date == requestedEntry.Date);
+                .SingleOrDefault(x =>
+                    x.Date == requestedEntry.Date);
 
             if (requestedEntry.MealId is null)
             {
                 if (existingEntry is not null)
                 {
-                    _dbContext.MealPlanEntries.Remove(existingEntry);
+                    _dbContext.MealPlanEntries
+                        .Remove(existingEntry);
                 }
 
                 continue;
@@ -238,12 +243,16 @@ public class MealPlansController : ControllerBase
 
             if (existingEntry is null)
             {
-                plan.AddMeal(requestedEntry.Date, meal);
+                plan.AddMeal(
+                    requestedEntry.Date,
+                    meal);
 
                 var newEntry = plan.Entries
-                    .Single(x => x.Date == requestedEntry.Date);
+                    .Single(x =>
+                        x.Date == requestedEntry.Date);
 
-                _dbContext.MealPlanEntries.Add(newEntry);
+                _dbContext.MealPlanEntries
+                    .Add(newEntry);
             }
             else
             {
@@ -255,9 +264,121 @@ public class MealPlansController : ControllerBase
 
         return NoContent();
     }
+
+    // ---------------------------------------------------------
+    // Side Dishes
+    // ---------------------------------------------------------
+
+    [HttpGet(
+        "{year:int}/{calendarWeek:int}/entries/{date}/sidedishes")]
+    public async Task<ActionResult> GetSideDishes(
+        int year,
+        int calendarWeek,
+        DateOnly date)
+    {
+        var plan = await _dbContext.WeeklyMealPlans
+            .AsNoTracking()
+            .Include(x => x.Entries)
+                .ThenInclude(x => x.SideDishes)
+            .SingleOrDefaultAsync(x =>
+                x.Year == year &&
+                x.CalendarWeek == calendarWeek);
+
+        if (plan is null)
+        {
+            return NotFound(
+                $"Für {year} / KW {calendarWeek} wurde kein Wochenplan gefunden.");
+        }
+
+        var entry = plan.Entries
+            .SingleOrDefault(x => x.Date == date);
+
+        if (entry is null)
+        {
+            return NotFound(
+                $"Für den {date} wurde kein Eintrag gefunden.");
+        }
+
+        var sideDishes = entry.SideDishes
+            .OrderBy(x => x.Name)
+            .Select(x => new
+            {
+                x.Id,
+                x.Name
+            });
+
+        return Ok(sideDishes);
+    }
+
+    [HttpPut(
+        "{year:int}/{calendarWeek:int}/entries/{date}/sidedishes")]
+    public async Task<IActionResult> SetSideDishes(
+        int year,
+        int calendarWeek,
+        DateOnly date,
+        SetSideDishesRequest request)
+    {
+        var plan = await _dbContext.WeeklyMealPlans
+            .Include(x => x.Entries)
+                .ThenInclude(x => x.SideDishes)
+            .SingleOrDefaultAsync(x =>
+                x.Year == year &&
+                x.CalendarWeek == calendarWeek);
+
+        if (plan is null)
+        {
+            return NotFound(
+                $"Für {year} / KW {calendarWeek} wurde kein Wochenplan gefunden.");
+        }
+
+        var entry = plan.Entries
+            .SingleOrDefault(x => x.Date == date);
+
+        if (entry is null)
+        {
+            return NotFound(
+                $"Für den {date} wurde kein Eintrag gefunden.");
+        }
+
+        var sideDishIds = request.SideDishIds
+            .Distinct()
+            .ToList();
+
+        var sideDishes = await _dbContext.SideDishes
+            .Where(x => sideDishIds.Contains(x.Id))
+            .ToListAsync();
+
+        if (sideDishes.Count != sideDishIds.Count)
+        {
+            return BadRequest(
+                "Mindestens eine angegebene Beilage wurde nicht gefunden.");
+        }
+
+        var existingSideDishes =
+            entry.SideDishes.ToList();
+
+        foreach (var sideDish in existingSideDishes)
+        {
+            entry.RemoveSideDish(sideDish);
+        }
+
+        foreach (var sideDish in sideDishes)
+        {
+            entry.AddSideDish(sideDish);
+        }
+
+        await _dbContext.SaveChangesAsync();
+
+        return NoContent();
+    }
 }
 
-    public record CreateMealPlanRequest(
+
+// ---------------------------------------------------------
+// Requests
+// ---------------------------------------------------------
+
+public record CreateMealPlanRequest(
     int Year,
     int CalendarWeek);
 
@@ -265,7 +386,8 @@ public record AddMealPlanEntryRequest(
     DateOnly Date,
     Guid MealId);
 
-public record UpdateMealPlanEntryRequest(Guid MealId);
+public record UpdateMealPlanEntryRequest(
+    Guid MealId);
 
 public record SaveWeekRequest(
     List<SaveWeekEntryRequest> Entries);
@@ -273,3 +395,6 @@ public record SaveWeekRequest(
 public record SaveWeekEntryRequest(
     DateOnly Date,
     Guid? MealId);
+
+public record SetSideDishesRequest(
+    List<Guid> SideDishIds);
